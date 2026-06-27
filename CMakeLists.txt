@@ -7,7 +7,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets)
+include(FetchContent)
+FetchContent_Declare(
+    qlementine-icons
+    GIT_REPOSITORY "https://github.com/oclero/qlementine-icons.git"
+    GIT_TAG        "v1.15.0"
+)
+FetchContent_MakeAvailable(qlementine-icons)
+
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Svg)
 if(UNIX AND NOT APPLE)
     find_package(Qt6 6.2 REQUIRED COMPONENTS DBus)
 endif()
@@ -30,7 +38,7 @@ add_executable(color-picker ${SOURCES})
 
 target_include_directories(color-picker PRIVATE src)
 
-target_link_libraries(color-picker PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+target_link_libraries(color-picker PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Svg qlementine-icons)
 if(UNIX AND NOT APPLE)
     target_link_libraries(color-picker PRIVATE Qt6::DBus)
     target_compile_definitions(color-picker PRIVATE HAVE_WAYLAND_PORTAL)

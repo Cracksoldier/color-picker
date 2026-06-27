@@ -7,6 +7,22 @@
 #include <QPushButton>
 #include <QGuiApplication>
 #include <QClipboard>
+#include <QIcon>
+#include <QPainter>
+#include <oclero/qlementine/icons/Icons16.hpp>
+
+namespace {
+QIcon makeIcon(const char* path) {
+    const int sz = 16, margin = 4;
+    QPixmap px(sz + margin, sz);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    QIcon(path).paint(&p, 0, 0, sz, sz);
+    p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    p.fillRect(0, 0, sz, sz, Qt::white);
+    return QIcon(px);
+}
+}
 
 ColorSlot::ColorSlot(const QString& label, QWidget* parent)
     : QWidget(parent)
@@ -59,6 +75,15 @@ ColorSlot::ColorSlot(const QString& label, QWidget* parent)
     m_wheelButton = new QPushButton("Color Wheel", this);
     m_wheelButton->setToolTip("Choose or edit color with the color wheel");
     root->addWidget(m_wheelButton);
+
+    namespace qi = oclero::qlementine::icons;
+    const QSize iconSz(20, 16);
+    m_pickButton->setIcon(makeIcon(qi::iconPath(qi::Icons16::Misc_Eyedropper)));
+    m_pickButton->setIconSize(iconSz);
+    m_copyButton->setIcon(makeIcon(qi::iconPath(qi::Icons16::Action_Copy)));
+    m_copyButton->setIconSize(iconSz);
+    m_wheelButton->setIcon(makeIcon(qi::iconPath(qi::Icons16::Misc_ColorSwatch)));
+    m_wheelButton->setIconSize(iconSz);
 
     connect(m_pickButton,  &QPushButton::clicked, this, &ColorSlot::pickRequested);
     connect(m_wheelButton, &QPushButton::clicked, this, &ColorSlot::onWheelClicked);

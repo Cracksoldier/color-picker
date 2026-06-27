@@ -8,6 +8,22 @@
 #include <QFrame>
 #include <QPushButton>
 #include <QLabel>
+#include <QIcon>
+#include <QPainter>
+#include <oclero/qlementine/icons/Icons16.hpp>
+
+namespace {
+QIcon makeIcon(const char* path) {
+    const int sz = 16, margin = 4;
+    QPixmap px(sz + margin, sz);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    QIcon(path).paint(&p, 0, 0, sz, sz);
+    p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    p.fillRect(0, 0, sz, sz, Qt::white);
+    return QIcon(px);
+}
+}
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -53,6 +69,14 @@ MainWindow::MainWindow(QWidget* parent)
     actionRow->setSpacing(6);
     auto* swapBtn  = new QPushButton("Swap A \xe2\x86\x94 B", this);
     auto* resetBtn = new QPushButton("Reset", this);
+
+    namespace qi = oclero::qlementine::icons;
+    const QSize iconSz(20, 16);
+    swapBtn->setIcon(makeIcon(qi::iconPath(qi::Icons16::Action_Swap)));
+    swapBtn->setIconSize(iconSz);
+    resetBtn->setIcon(makeIcon(qi::iconPath(qi::Icons16::Action_Reset)));
+    resetBtn->setIconSize(iconSz);
+
     actionRow->addWidget(swapBtn);
     actionRow->addWidget(resetBtn);
     root->addLayout(actionRow);
