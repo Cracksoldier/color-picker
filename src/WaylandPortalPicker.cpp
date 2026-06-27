@@ -33,11 +33,11 @@ void WaylandPortalPicker::startPick() {
         return;
     }
 
-    QString handlePath = reply.value().path();
+    m_handlePath = reply.value().path();
 
     bool connected = QDBusConnection::sessionBus().connect(
         "org.freedesktop.portal.Desktop",
-        handlePath,
+        m_handlePath,
         "org.freedesktop.portal.Request",
         "Response",
         this,
@@ -50,10 +50,10 @@ void WaylandPortalPicker::startPick() {
 }
 
 void WaylandPortalPicker::onResponse(uint code, QVariantMap results) {
-    // Unsubscribe from future signals
+    // Unsubscribe using the exact path we subscribed with
     QDBusConnection::sessionBus().disconnect(
         "org.freedesktop.portal.Desktop",
-        {},
+        m_handlePath,
         "org.freedesktop.portal.Request",
         "Response",
         this,

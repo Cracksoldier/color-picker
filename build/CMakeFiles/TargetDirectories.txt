@@ -1,0 +1,5 @@
+/home/andreas/Apps/color-picker/build/CMakeFiles/color-picker.dir
+/home/andreas/Apps/color-picker/build/CMakeFiles/edit_cache.dir
+/home/andreas/Apps/color-picker/build/CMakeFiles/rebuild_cache.dir
+/home/andreas/Apps/color-picker/build/CMakeFiles/color-picker_autogen_timestamp_deps.dir
+/home/andreas/Apps/color-picker/build/CMakeFiles/color-picker_autogen.dir

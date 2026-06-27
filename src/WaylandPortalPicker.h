@@ -14,4 +14,7 @@ signals:
 
 private slots:
     void onResponse(uint code, QVariantMap results);
+
+private:
+    QString m_handlePath;
 };

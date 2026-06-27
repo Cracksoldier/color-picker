@@ -6,6 +6,7 @@
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <QKeyEvent>
+#include <QCloseEvent>
 #include <QTimer>
 #include <QCursor>
 
@@ -18,12 +19,16 @@ PickerOverlay::PickerOverlay(QWidget* parent)
 }
 
 void PickerOverlay::activate() {
-    // Grab before showing so the overlay itself doesn't appear in the screenshot
+    // Grab the full virtual desktop (all monitors) before showing the overlay.
+    // On X11, grabWindow(WId(0)) captures the root window which spans all screens.
+    // We store the virtual geometry so mousePressEvent uses the same coordinate space.
     QScreen* screen = QGuiApplication::primaryScreen();
-    m_screenshot = screen->grabWindow(WId(0));
+    m_virtualGeom = screen->virtualGeometry();
+    m_screenshot  = screen->grabWindow(WId(0));
+    m_image       = m_screenshot.toImage(); // cache once — reused in paint and click
 
-    QTimer::singleShot(50, this, [this, screen]() {
-        setGeometry(screen->geometry());
+    QTimer::singleShot(50, this, [this]() {
+        setGeometry(m_virtualGeom);
         showFullScreen();
         raise();
         activateWindow();
@@ -32,55 +37,47 @@ void PickerOverlay::activate() {
 }
 
 void PickerOverlay::paintEvent(QPaintEvent*) {
-    QPainter p(this);
-
-    // Draw the screenshot as background
-    p.drawPixmap(0, 0, m_screenshot);
-
     if (m_screenshot.isNull()) return;
 
-    QPoint cur = mapFromGlobal(QCursor::pos());
-    QImage img = m_screenshot.toImage();
+    QPainter p(this);
+    p.drawPixmap(0, 0, m_screenshot);
 
-    // Sample hover color
-    if (img.rect().contains(cur))
-        m_hoverColor = img.pixelColor(cur);
+    QPoint cur = mapFromGlobal(QCursor::pos());
+
+    // Sample hover color from cached image
+    if (m_image.rect().contains(cur))
+        m_hoverColor = m_image.pixelColor(cur);
 
     // Loupe parameters
-    const int srcRadius = 8;    // px sampled from screenshot (half-size)
+    const int srcRadius = 8;
     const int loupeSize = 128;
     const int offsetX   = 24;
     const int offsetY   = -loupeSize - 24;
 
     QRect loupeRect(cur.x() + offsetX, cur.y() + offsetY, loupeSize, loupeSize);
-    // Flip loupe to the other side if it would go off-screen
+    // Flip loupe if it would go off-screen
     if (loupeRect.right() > width())
         loupeRect.moveLeft(cur.x() - offsetX - loupeSize);
     if (loupeRect.top() < 0)
         loupeRect.moveTop(cur.y() + 24);
 
-    // Sample region from screenshot
+    // Sample region from screenshot; use QPainter::drawPixmap with src rect to
+    // avoid an intermediate allocation (scale and blit in one step)
     QRect srcRect(cur.x() - srcRadius, cur.y() - srcRadius,
                   srcRadius * 2 + 1, srcRadius * 2 + 1);
-    srcRect = srcRect.intersected(img.rect());
+    srcRect = srcRect.intersected(m_screenshot.rect());
     if (srcRect.isEmpty()) return;
 
-    QPixmap loupePixmap = m_screenshot.copy(srcRect).scaled(
-        loupeSize, loupeSize, Qt::IgnoreAspectRatio, Qt::FastTransformation);
-
-    // Clip to circle
     p.setRenderHint(QPainter::Antialiasing);
     QPainterPath circlePath;
     circlePath.addEllipse(loupeRect);
     p.setClipPath(circlePath);
-    p.drawPixmap(loupeRect, loupePixmap);
+    p.drawPixmap(loupeRect, m_screenshot, srcRect); // single-step scale+blit
     p.setClipping(false);
 
-    // Border
+    // Border and crosshair
     p.setPen(QPen(QColor("#cdd6f4"), 2));
     p.drawEllipse(loupeRect);
-
-    // Center crosshair lines
     QPoint center = loupeRect.center();
     p.setPen(QPen(QColor("#cdd6f4"), 1));
     p.drawLine(center.x() - 6, center.y(), center.x() + 6, center.y());
@@ -106,16 +103,15 @@ void PickerOverlay::mouseMoveEvent(QMouseEvent*) {
 
 void PickerOverlay::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
-        QPoint pos = event->globalPosition().toPoint();
-        QRect screenGeom = QGuiApplication::primaryScreen()->geometry();
-        QPoint localPos = pos - screenGeom.topLeft();
+        // Convert global click to screenshot-local coords using the same virtual
+        // geometry recorded in activate() — consistent with the grabbed pixmap.
+        QPoint pos      = event->globalPosition().toPoint();
+        QPoint localPos = pos - m_virtualGeom.topLeft();
 
         QColor picked;
-        if (!m_screenshot.isNull()) {
-            QImage img = m_screenshot.toImage();
-            if (img.rect().contains(localPos))
-                picked = img.pixelColor(localPos);
-        }
+        if (!m_image.isNull() && m_image.rect().contains(localPos))
+            picked = m_image.pixelColor(localPos);
+
         finish();
         if (picked.isValid())
             emit colorPicked(picked);
@@ -132,6 +128,12 @@ void PickerOverlay::keyPressEvent(QKeyEvent* event) {
         finish();
         emit pickCanceled();
     }
+}
+
+// WM-initiated close (Alt+F4, compositor kill): ensure cursor is always restored.
+void PickerOverlay::closeEvent(QCloseEvent* event) {
+    finish();
+    QWidget::closeEvent(event);
 }
 
 void PickerOverlay::finish() {

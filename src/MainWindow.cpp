@@ -73,11 +73,13 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 void MainWindow::onPickRequestedA() {
+    if (m_pendingPick != PickTarget::None) return;
     m_pendingPick = PickTarget::SlotA;
     m_picker->startPick();
 }
 
 void MainWindow::onPickRequestedB() {
+    if (m_pendingPick != PickTarget::None) return;
     m_pendingPick = PickTarget::SlotB;
     m_picker->startPick();
 }

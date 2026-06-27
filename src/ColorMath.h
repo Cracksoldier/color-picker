@@ -31,8 +31,10 @@ namespace ColorMath {
 
 [[nodiscard]] inline QString toHslStr(QColor c) {
     QColor h = c.toHsl();
+    // hslHue() returns -1 for achromatic colors (greys, black, white); clamp to 0.
+    int hue = qMax(0, h.hslHue());
     return QString("hsl(%1, %2%, %3%)")
-        .arg(h.hslHue())
+        .arg(hue)
         .arg(qRound(h.hslSaturationF() * 100))
         .arg(qRound(h.lightnessF() * 100));
 }
