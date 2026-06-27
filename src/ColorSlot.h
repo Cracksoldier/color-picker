@@ -20,6 +20,7 @@ signals:
 
 private slots:
     void copyHex();
+    void onWheelClicked();
 
 private:
     void updateDisplay();
@@ -30,5 +31,6 @@ private:
     QLabel*      m_rgbLabel;
     QLabel*      m_hslLabel;
     QPushButton* m_pickButton;
+    QPushButton* m_wheelButton;
     QPushButton* m_copyButton;
 };

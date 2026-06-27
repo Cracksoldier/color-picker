@@ -19,6 +19,8 @@ set(SOURCES
     src/ColorPicker.cpp
     src/PickerOverlay.cpp
     src/ComparisonPanel.cpp
+    src/ColorWheelWidget.cpp
+    src/ColorWheelDialog.cpp
 )
 if(UNIX AND NOT APPLE)
     list(APPEND SOURCES src/WaylandPortalPicker.cpp)
