@@ -29,13 +29,28 @@ The `WAYLAND_DISPLAY` check is critical for AppImages: they bundle no Qt Wayland
 
 Both emit `colorPicked(QColor)` / `pickCanceled()` and are owned/deleted by `ColorPicker`.
 
-**Data flow:**
+**Data flow — screen pick:**
 ```
 ColorSlot::pickRequested → MainWindow sets PickTarget enum
   → ColorPicker::startPick → platform picker emits colorPicked
   → MainWindow::onColorPicked → ColorSlot::setColor + ComparisonPanel::setColorA/B
 ```
 
+**Data flow — color wheel:**
+```
+ColorSlot::onWheelClicked → ColorWheelDialog(initial, parent).exec()
+  → ColorWheelWidget emits colorChanged on drag → dialog updates m_color
+  → dialog accepted → ColorSlot::setColor → ColorSlot::colorChanged
+  → ComparisonPanel::setColorA/B
+```
+
+**`ColorWheelWidget`** is a custom 240×240 `QWidget` with two interactive regions:
+- **Outer hue ring** — `QConicalGradient` baked once to a `QPixmap` (`m_ringCache`) at construction; dragging updates `m_lastHue`.
+- **Inner SV square** — two overlaid `QLinearGradient`s (horizontal: white→full-hue; vertical overlay: transparent→black); redrawn each `paintEvent` since it depends on the current hue.
+- `m_lastHue` survives achromatic colors (`hsvHue() == -1`): both the SV square gradient and the ring indicator use it so grey/white/black colors don't snap to hue 0 (red) when the user adjusts saturation.
+
+**`ColorWheelDialog`** wraps `ColorWheelWidget` in a `QDialog` with a hex `QLineEdit` (validator: `^#[0-9A-Fa-f]{0,6}$`) and a preview swatch. Uses `textEdited` (not `textChanged`) so programmatic `setText` calls don't re-trigger `onHexEdited`. Hex formatting delegates to `ColorMath::toHex()`.
+
 **`ColorMath.h`** is header-only with no Qt signals — add new color math here. All comparison metrics (WCAG contrast ratio, pass/fail thresholds) live here. WCAG thresholds: AA normal ≥4.5, AA large ≥3.0, AAA normal ≥7.0, AAA large ≥4.5.
 
-**UI** is a single fixed-width (340 px) `QMainWindow` with a Catppuccin Mocha stylesheet applied in `main.cpp`. Swatch colors are set via `QLabel::setStyleSheet("background-color: #RRGGBB")`.
+**UI** is a single fixed-width (340 px) `QMainWindow` with a Catppuccin Mocha stylesheet applied in `main.cpp`. Swatch colors are set via `QLabel::setStyleSheet("background-color: #RRGGBB")`. Each `ColorSlot` has two button rows: Pick + Copy on the first, Color Wheel full-width on the second (three buttons in one row don't fit the ~136 px slot width).
