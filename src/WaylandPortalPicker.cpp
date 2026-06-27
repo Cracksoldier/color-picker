@@ -27,13 +27,12 @@ void WaylandPortalPicker::startPick() {
     QVariantMap options;
     options["handle_token"] = token;
 
-    QDBusReply<QDBusObjectPath> reply = iface.call("PickColor", QString(""), options);
-    if (!reply.isValid()) {
-        emit pickCanceled();
-        return;
-    }
-
-    m_handlePath = reply.value().path();
+    // Pre-compute handle path per XDG portal spec: strip leading ':' from unique name,
+    // replace '.' with '_'. Subscribe BEFORE calling the method to avoid missing the
+    // Response signal if the compositor delivers it before we connect.
+    QString sender = QDBusConnection::sessionBus().baseService();
+    QString senderPart = sender.mid(1).replace('.', '_');
+    m_handlePath = "/org/freedesktop/portal/desktop/request/" + senderPart + "/" + token;
 
     bool connected = QDBusConnection::sessionBus().connect(
         "org.freedesktop.portal.Desktop",
@@ -46,6 +45,21 @@ void WaylandPortalPicker::startPick() {
 
     if (!connected) {
         emit pickCanceled();
+        return;
+    }
+
+    QDBusReply<QDBusObjectPath> reply = iface.call("PickColor", QString(""), options);
+    if (!reply.isValid()) {
+        QDBusConnection::sessionBus().disconnect(
+            "org.freedesktop.portal.Desktop",
+            m_handlePath,
+            "org.freedesktop.portal.Request",
+            "Response",
+            this,
+            SLOT(onResponse(uint, QVariantMap))
+        );
+        emit pickCanceled();
+        return;
     }
 }
 
@@ -71,7 +85,7 @@ void WaylandPortalPicker::onResponse(uint code, QVariantMap results) {
     }
 
     // Color is encoded as (ddd) — sRGB in [0,1]
-    QDBusArgument arg = results["color"].value<QDBusArgument>();
+    const QDBusArgument arg = results["color"].value<QDBusArgument>();
     double r = 0, g = 0, b = 0;
     arg.beginStructure();
     arg >> r >> g >> b;
