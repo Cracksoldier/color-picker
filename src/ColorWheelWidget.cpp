@@ -4,6 +4,7 @@
 #include <QConicalGradient>
 #include <QLinearGradient>
 #include <QMouseEvent>
+#include <QPixmap>
 #include <QtMath>
 
 // Geometry constants (widget is 240×240, center at 120,120)
@@ -14,15 +15,35 @@ static constexpr qreal kRingW  = 18.0;  // ring width
 static constexpr qreal kInnerR = 88.0;  // kOuterR - kRingW - 4px gap
 static constexpr qreal kHalfSq = 62.0;  // kInnerR / sqrt(2), rounded down
 
+static QPixmap buildRingCache() {
+    QPixmap px(240, 240);
+    px.fill(Qt::transparent);
+    QPainter rp(&px);
+    rp.setRenderHint(QPainter::Antialiasing);
+    QPointF center(kCx, kCy);
+    // QConicalGradient sweeps CCW on screen: east(0°)→north(90°)→west(180°)→south(270°)
+    QConicalGradient hueGrad(center, 0.0);
+    for (int i = 0; i <= 360; i++)
+        hueGrad.setColorAt(i / 360.0, QColor::fromHsv(i % 360, 255, 255));
+    QPainterPath outerPath, innerPath;
+    outerPath.addEllipse(center, kOuterR, kOuterR);
+    innerPath.addEllipse(center, kOuterR - kRingW, kOuterR - kRingW);
+    rp.fillPath(outerPath.subtracted(innerPath), hueGrad);
+    return px;
+}
+
 ColorWheelWidget::ColorWheelWidget(QWidget* parent)
     : QWidget(parent)
     , m_color(QColor::fromHsv(0, 255, 255))
+    , m_ringCache(buildRingCache())
 {
     setFixedSize(240, 240);
 }
 
 void ColorWheelWidget::setColor(QColor c) {
     m_color = c.toHsv();
+    if (m_color.hsvHue() >= 0)
+        m_lastHue = m_color.hsvHue();
     update();
 }
 
@@ -57,7 +78,8 @@ void ColorWheelWidget::updateFromRing(QPointF pos) {
     qreal cwDeg = qRadiansToDegrees(qAtan2(dy, dx));
     if (cwDeg < 0) cwDeg += 360.0;
     int hue = qRound(360.0 - cwDeg) % 360;
-    int sat = qMax(0, m_color.hsvSaturation());
+    m_lastHue = hue;
+    int sat = m_color.hsvSaturation();  // always 0-255 for valid colors
     int val = m_color.value();
     m_color.setHsv(hue, sat, val);
     update();
@@ -68,7 +90,8 @@ void ColorWheelWidget::updateFromSquare(QPointF pos) {
     QRectF sq = squareRect();
     int sat = qRound(qBound(0.0, (pos.x() - sq.left()) / sq.width(),  1.0) * 255.0);
     int val = qRound(qBound(0.0, 1.0 - (pos.y() - sq.top()) / sq.height(), 1.0) * 255.0);
-    int hue = qMax(0, m_color.hsvHue());
+    // Use m_lastHue so dragging in the SV square on an achromatic color doesn't snap to red
+    int hue = (m_color.hsvHue() >= 0) ? m_color.hsvHue() : m_lastHue;
     m_color.setHsv(hue, sat, val);
     update();
     emit colorChanged(m_color);
@@ -95,21 +118,13 @@ void ColorWheelWidget::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
-    QPointF center(kCx, kCy);
-    int hue = qMax(0, m_color.hsvHue());
-    int sat = qMax(0, m_color.hsvSaturation());
+    // Use m_lastHue so achromatic colors show the most recent explicitly chosen hue
+    int hue = (m_color.hsvHue() >= 0) ? m_color.hsvHue() : m_lastHue;
+    int sat = m_color.hsvSaturation();
     int val = m_color.value();
 
-    // --- Hue ring ---
-    // QConicalGradient sweeps CCW on screen: east(0°)→north(90°)→west(180°)→south(270°)
-    QConicalGradient hueGrad(center, 0.0);
-    for (int i = 0; i <= 360; i++)
-        hueGrad.setColorAt(i / 360.0, QColor::fromHsv(i % 360, 255, 255));
-
-    QPainterPath outerCircle, innerCircle;
-    outerCircle.addEllipse(center, kOuterR, kOuterR);
-    innerCircle.addEllipse(center, kOuterR - kRingW, kOuterR - kRingW);
-    p.fillPath(outerCircle.subtracted(innerCircle), hueGrad);
+    // --- Hue ring (pre-rendered, invariant) ---
+    p.drawPixmap(0, 0, m_ringCache);
 
     // --- SV square ---
     QRectF sq = squareRect();
@@ -127,8 +142,7 @@ void ColorWheelWidget::paintEvent(QPaintEvent*) {
     p.fillRect(sq, vGrad);
 
     // --- Ring indicator ---
-    // Indicator is at screen CW angle = (360 - hue), using cos/sin of that:
-    // cos(360-h) = cos(h), sin(360-h) = -sin(h)
+    // Indicator is at screen CW angle = (360 - hue): cos(360-h)=cos(h), sin(360-h)=-sin(h)
     qreal hueRad  = qDegreesToRadians(static_cast<qreal>(hue));
     qreal ringMid = kOuterR - kRingW / 2.0;
     QPointF ringPt(kCx + ringMid * qCos(hueRad),

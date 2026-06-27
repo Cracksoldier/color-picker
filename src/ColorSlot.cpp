@@ -48,16 +48,17 @@ ColorSlot::ColorSlot(const QString& label, QWidget* parent)
 
     m_pickButton = new QPushButton("Pick", this);
     m_pickButton->setToolTip("Pick a color from the screen");
-    m_wheelButton = new QPushButton("Wheel", this);
-    m_wheelButton->setToolTip("Choose or edit color with the color wheel");
     m_copyButton = new QPushButton("Copy", this);
     m_copyButton->setToolTip("Copy hex code to clipboard");
     m_copyButton->setEnabled(false);
 
     btnRow->addWidget(m_pickButton);
-    btnRow->addWidget(m_wheelButton);
     btnRow->addWidget(m_copyButton);
     root->addLayout(btnRow);
+
+    m_wheelButton = new QPushButton("Color Wheel", this);
+    m_wheelButton->setToolTip("Choose or edit color with the color wheel");
+    root->addWidget(m_wheelButton);
 
     connect(m_pickButton,  &QPushButton::clicked, this, &ColorSlot::pickRequested);
     connect(m_wheelButton, &QPushButton::clicked, this, &ColorSlot::onWheelClicked);

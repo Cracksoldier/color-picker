@@ -1,5 +1,6 @@
 #include "ColorWheelDialog.h"
 #include "ColorWheelWidget.h"
+#include "ColorMath.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -58,13 +59,13 @@ ColorWheelDialog::ColorWheelDialog(QColor initial, QWidget* parent)
             this, &ColorWheelDialog::onHexEdited);
 
     updateSwatch();
-    m_hexEdit->setText(m_color.name(QColor::HexRgb).toUpper());
+    m_hexEdit->setText(ColorMath::toHex(m_color));
 }
 
 void ColorWheelDialog::onWheelColorChanged(QColor c) {
     m_color = c;
     updateSwatch();
-    m_hexEdit->setText(m_color.name(QColor::HexRgb).toUpper());
+    m_hexEdit->setText(ColorMath::toHex(m_color));
 }
 
 void ColorWheelDialog::onHexEdited() {
@@ -78,5 +79,5 @@ void ColorWheelDialog::onHexEdited() {
 void ColorWheelDialog::updateSwatch() {
     m_swatch->setStyleSheet(QString(
         "background-color: %1; border-radius: 6px; border: 1px solid #45475a;")
-        .arg(m_color.name(QColor::HexRgb)));
+        .arg(ColorMath::toHex(m_color)));
 }

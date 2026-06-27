@@ -29,5 +29,7 @@ private:
     [[nodiscard]] QRectF squareRect() const;
 
     QColor     m_color;
+    int        m_lastHue  = 0;   // last explicitly chosen hue; survives achromatic transitions
+    QPixmap    m_ringCache;      // pre-rendered hue ring (invariant, built once)
     DragRegion m_dragging = DragRegion::None;
 };
