@@ -152,7 +152,7 @@ jobs:
       - name: Bundle with windeployqt
         shell: pwsh
         run: |
-          $qtBin = "$env:Qt6_DIR\bin"
+          $qtBin = "$env:QT_ROOT_DIR\bin"
           $deploy = if (Test-Path "$qtBin\windeployqt6.exe") {
             "$qtBin\windeployqt6.exe"
           } else {
