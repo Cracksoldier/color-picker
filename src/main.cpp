@@ -1,5 +1,4 @@
 #include <QApplication>
-#include <QIcon>
 #include <oclero/qlementine/icons/QlementineIcons.hpp>
 #include "MainWindow.h"
 
@@ -9,7 +8,6 @@ int main(int argc, char* argv[]) {
     app.setOrganizationName("local");
 
     oclero::qlementine::icons::initializeIconTheme();
-    QIcon::setThemeName("qlementine");
 
     app.setStyleSheet(R"(
         QWidget {

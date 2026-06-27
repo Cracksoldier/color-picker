@@ -5,10 +5,36 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QDialogButtonBox>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QIcon>
+#include <QImage>
+#include <QPainter>
+#include <oclero/qlementine/icons/Icons16.hpp>
+
+namespace {
+QIcon makeIcon(const char* path) {
+    const int sz = 16, margin = 4;
+    QPixmap src(sz, sz);
+    src.fill(Qt::transparent);
+    {
+        QPainter p(&src);
+        QIcon(path).paint(&p, 0, 0, sz, sz);
+    }
+    QImage img = src.toImage().convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < sz; ++y) {
+        auto* row = reinterpret_cast<QRgb*>(img.scanLine(y));
+        for (int x = 0; x < sz; ++x)
+            row[x] = qRgba(255, 255, 255, qAlpha(row[x]));
+    }
+    QPixmap px(sz + margin, sz);
+    px.fill(Qt::transparent);
+    QPainter p2(&px);
+    p2.drawImage(0, 0, img);
+    return QIcon(px);
+}
+}
 
 ColorWheelDialog::ColorWheelDialog(QColor initial, QWidget* parent)
     : QDialog(parent)
@@ -47,12 +73,24 @@ ColorWheelDialog::ColorWheelDialog(QColor initial, QWidget* parent)
     hexRow->addWidget(m_hexEdit);
     root->addLayout(hexRow);
 
-    auto* buttons = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    root->addWidget(buttons);
+    auto* btnRow = new QHBoxLayout;
+    btnRow->setSpacing(6);
+    auto* okBtn     = new QPushButton("OK", this);
+    auto* cancelBtn = new QPushButton(tr("Cancel"), this);
 
-    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    namespace qi = oclero::qlementine::icons;
+    const QSize iconSz(20, 16);
+    okBtn->setIcon(makeIcon(qi::iconPath(qi::Icons16::Shape_CheckTick)));
+    okBtn->setIconSize(iconSz);
+    cancelBtn->setIcon(makeIcon(qi::iconPath(qi::Icons16::Misc_Forbidden)));
+    cancelBtn->setIconSize(iconSz);
+
+    btnRow->addWidget(okBtn, 1);
+    btnRow->addWidget(cancelBtn);
+    root->addLayout(btnRow);
+
+    connect(okBtn,     &QPushButton::clicked, this, &QDialog::accept);
+    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_wheel,   &ColorWheelWidget::colorChanged,
             this, &ColorWheelDialog::onWheelColorChanged);
     connect(m_hexEdit, &QLineEdit::textEdited,

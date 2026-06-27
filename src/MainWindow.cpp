@@ -9,18 +9,29 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QIcon>
+#include <QImage>
 #include <QPainter>
 #include <oclero/qlementine/icons/Icons16.hpp>
 
 namespace {
 QIcon makeIcon(const char* path) {
     const int sz = 16, margin = 4;
+    QPixmap src(sz, sz);
+    src.fill(Qt::transparent);
+    {
+        QPainter p(&src);
+        QIcon(path).paint(&p, 0, 0, sz, sz);
+    }
+    QImage img = src.toImage().convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < sz; ++y) {
+        auto* row = reinterpret_cast<QRgb*>(img.scanLine(y));
+        for (int x = 0; x < sz; ++x)
+            row[x] = qRgba(255, 255, 255, qAlpha(row[x]));
+    }
     QPixmap px(sz + margin, sz);
     px.fill(Qt::transparent);
-    QPainter p(&px);
-    QIcon(path).paint(&p, 0, 0, sz, sz);
-    p.setCompositionMode(QPainter::CompositionMode_SourceIn);
-    p.fillRect(0, 0, sz, sz, Qt::white);
+    QPainter p2(&px);
+    p2.drawImage(0, 0, img);
     return QIcon(px);
 }
 }
