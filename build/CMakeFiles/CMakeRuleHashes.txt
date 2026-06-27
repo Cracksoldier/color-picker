@@ -1,3 +1,0 @@
-# Hashes of file build rules.
-7f07d2ec6bfe8a79b8aea580b7dda483 CMakeFiles/color-picker_autogen
-0a4df8564d0b85b91079053e61b0ad0f color-picker_autogen/timestamp
