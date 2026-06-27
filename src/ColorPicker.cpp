@@ -4,13 +4,19 @@
 #include "WaylandPortalPicker.h"
 #endif
 #include <QGuiApplication>
+#include <QProcessEnvironment>
 
 ColorPicker::ColorPicker(QObject* parent)
     : QObject(parent)
 {}
 
 bool ColorPicker::isWayland() const {
-    return QGuiApplication::platformName().startsWith("wayland");
+    if (QGuiApplication::platformName().startsWith("wayland"))
+        return true;
+    // Running as X11 under XWayland (e.g. AppImage without Qt Wayland plugin):
+    // grabWindow on the root X11 window returns black because the Wayland
+    // compositor never renders to it. Use the portal over DBus instead.
+    return !QProcessEnvironment::systemEnvironment().value("WAYLAND_DISPLAY").isEmpty();
 }
 
 void ColorPicker::startPick() {
