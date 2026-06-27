@@ -1,0 +1,228 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.2.0)"
+        required: true
+        type: string
+      next_version:
+        description: "Next development version (e.g. 1.3.0-dev)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  QT_VERSION: "6.7.3"
+
+# ──────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── 1. Bump version, commit, tag ──────────────────────────────────────────
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Set release version in CMakeLists.txt
+        run: |
+          sed -i 's/set(APP_VERSION "[^"]*")/set(APP_VERSION "${{ inputs.version }}")/' CMakeLists.txt
+          git add CMakeLists.txt
+          git commit -m "chore: release v${{ inputs.version }}"
+
+      - name: Create and push tag
+        id: tag
+        run: |
+          TAG="v${{ inputs.version }}"
+          git tag "$TAG"
+          git push origin HEAD:main "$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  # ── 2a. Linux → AppImage ──────────────────────────────────────────────────
+  build-linux:
+    needs: prepare
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: gcc_64
+          cache: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y \
+            libgl1-mesa-dev \
+            libdbus-1-dev \
+            libfuse2 \
+            patchelf
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Install into AppDir
+        run: DESTDIR=${{ github.workspace }}/AppDir cmake --install build
+
+      - name: Download linuxdeploy + Qt plugin
+        run: |
+          curl -fsSL -o linuxdeploy \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o linuxdeploy-plugin-qt \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy linuxdeploy-plugin-qt
+
+      - name: Build AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          OUTPUT: "color-picker-${{ inputs.version }}-x86_64.AppImage"
+        run: |
+          ./linuxdeploy \
+            --appdir AppDir \
+            -e AppDir/usr/bin/color-picker \
+            -d assets/color-picker.desktop \
+            -i assets/color-picker.png \
+            --plugin qt \
+            --output appimage
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: "color-picker-${{ inputs.version }}-x86_64.AppImage"
+          if-no-files-found: error
+
+  # ── 2b. Windows → zipped EXE bundle ──────────────────────────────────────
+  build-windows:
+    needs: prepare
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2019_64
+          cache: true
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Bundle with windeployqt
+        shell: pwsh
+        run: |
+          $qtBin = "$env:Qt6_DIR\bin"
+          $deploy = if (Test-Path "$qtBin\windeployqt6.exe") {
+            "$qtBin\windeployqt6.exe"
+          } else {
+            "$qtBin\windeployqt.exe"
+          }
+          New-Item -ItemType Directory -Path deploy | Out-Null
+          Copy-Item build\Release\color-picker.exe deploy\
+          & $deploy --release deploy\color-picker.exe
+
+      - name: Package as zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path deploy\* `
+            -DestinationPath "color-picker-${{ inputs.version }}-windows-x64.zip"
+
+      - name: Upload Windows bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-bundle
+          path: "color-picker-${{ inputs.version }}-windows-x64.zip"
+          if-no-files-found: error
+
+  # ── 3. Create release + bump to next version ──────────────────────────────
+  release:
+    needs: [prepare, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download AppImage
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-appimage
+          path: dist/
+
+      - name: Download Windows bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-bundle
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: "Color Picker ${{ needs.prepare.outputs.tag }}"
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            dist/color-picker-${{ inputs.version }}-x86_64.AppImage
+            dist/color-picker-${{ inputs.version }}-windows-x64.zip
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump to next development version
+        run: |
+          git checkout main
+          git pull origin main
+          sed -i 's/set(APP_VERSION "[^"]*")/set(APP_VERSION "${{ inputs.next_version }}")/' CMakeLists.txt
+          git add CMakeLists.txt
+          git commit -m "chore: bump version to ${{ inputs.next_version }} [skip ci]"
+          git push origin main

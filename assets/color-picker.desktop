@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Color Picker
+Comment=Pick colors from your screen
+Exec=color-picker
+Icon=color-picker
+Categories=Graphics;Utility;
+Keywords=color;picker;eyedropper;
+Terminal=false
